@@ -1,0 +1,14 @@
+{
+  "name": "dragon-arena",
+  "version": "1.0.0",
+  "description": "Real-time, human-playable UNSW Battlecode 2026 (dragons & pearls) for discovering strategies with friends",
+  "license": "MIT",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "sim": "node sim.js",
+    "test": "node test/diff-test.js --quick && node test/match-test.js && node test/ws-protocol.js",
+    "test:full": "node test/diff-test.js && node test/stress.js && node test/match-test.js && node test/ws-protocol.js"
+  }
+}

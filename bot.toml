@@ -1,0 +1,3 @@
+[project]
+language = "py"
+include = [ "*.py" ]

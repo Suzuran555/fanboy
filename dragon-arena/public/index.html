@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragon Arena — playable UNSW Battlecode</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23072330'/%3E%3Cpath d='M6 22h8v-8h8v-6' fill='none' stroke='%234dd6ff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='23' r='3' fill='%23ffe3ef'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- ============================================================ HOME -->
+<section id="home" class="screen">
+  <div class="home-card">
+    <h1><span class="logo-mark"></span>Dragon Arena</h1>
+    <p class="tagline">UNSW Battlecode 2026, playable by hand. Same rules, same maps, same one-dragon-at-a-time turn order — with a clock.</p>
+    <label class="field"><span>Your name</span><input id="nameInput" maxlength="20" placeholder="Name" autocomplete="off"></label>
+    <div class="home-actions">
+      <button id="createBtn" class="btn primary">Create a room</button>
+      <div class="join-row">
+        <input id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+        <button id="joinBtn" class="btn">Join</button>
+      </div>
+    </div>
+    <div id="homeStatus" class="status"></div>
+    <details id="replayList" class="replays"><summary>Recent replays on this server</summary><ul id="replayItems"></ul></details>
+  </div>
+</section>
+
+<!-- ============================================================ LOBBY -->
+<section id="lobby" class="screen" hidden>
+  <header class="lobby-head">
+    <div>
+      <div class="eyebrow">Room</div>
+      <div class="room-code"><span id="roomCode">----</span><button id="copyLink" class="btn small">Copy invite link</button></div>
+    </div>
+    <div class="lobby-score" id="lobbyScore"></div>
+    <button id="leaveBtn" class="btn small ghost">Leave</button>
+  </header>
+  <div class="lobby-grid">
+    <div class="panel">
+      <h2>Sides</h2>
+      <div class="seats" id="seats"></div>
+      <div class="members" id="members"></div>
+      <h2>Rules of the clock</h2>
+      <div class="settings" id="settings">
+        <label class="field"><span>Turn timer <em>how long the game waits when it is a manual dragon's turn and nothing is queued</em></span>
+          <select id="setTurnTimer">
+            <option value="0">Off — never wait (pure real-time)</option>
+            <option value="700">0.7 s</option>
+            <option value="1500">1.5 s</option>
+            <option value="3000">3 s</option>
+            <option value="6000">6 s</option>
+            <option value="-1">Unlimited (turn-based study)</option>
+          </select></label>
+        <label class="field"><span>Round pace <em>minimum length of a round; turns ripple through it in id order</em></span>
+          <select id="setRoundMs">
+            <option value="120">0.12 s — blitz</option>
+            <option value="250">0.25 s</option>
+            <option value="500">0.5 s</option>
+            <option value="800">0.8 s</option>
+            <option value="1500">1.5 s</option>
+          </select></label>
+        <label class="field"><span>Rounds</span>
+          <select id="setMaxRounds">
+            <option value="150">150 — quick game</option>
+            <option value="300">300</option>
+            <option value="500">500 — competition length</option>
+          </select></label>
+        <label class="check"><input type="checkbox" id="setAssist"><span>Swerve assist <em>an idle manual dragon avoids a fatal tile straight ahead</em></span></label>
+      </div>
+      <div class="start-row">
+        <button id="startBtn" class="btn primary big">Start match</button>
+        <div id="lobbyStatus" class="status"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Map</h2>
+      <div class="map-pick">
+        <div class="map-list" id="mapList"></div>
+        <div class="map-preview">
+          <canvas id="previewCanvas" width="420" height="420"></canvas>
+          <div id="mapInfo" class="map-info"></div>
+        </div>
+      </div>
+      <details class="custom-map" id="customMapBox">
+        <summary>Use your own map (paste a <code>.map</code> file from the official map editor)</summary>
+        <textarea id="customMapText" spellcheck="false" placeholder="MAP 16 16&#10;SYMMETRY xy&#10;..."></textarea>
+        <button id="customMapBtn" class="btn small">Load this map</button>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ GAME / REPLAY -->
+<section id="game" class="screen" hidden>
+  <div class="board-wrap">
+    <div class="board-top"><div id="banner" class="banner" hidden></div></div>
+    <div class="board-mid" id="boardWrap">
+      <canvas id="board"></canvas>
+      <div id="countdown" class="countdown" hidden></div>
+      <div id="toast" class="toast" hidden></div>
+    </div>
+    <div class="board-tools">
+      <button class="chip" id="tglIds" title="Dragon ids next to their heads (I)">Ids</button>
+      <button class="chip" id="tglTimers" title="Pearl spawn timers (T)">Timers</button>
+      <button class="chip" id="tglVision" title="7×7 bot vision of the selected dragon (V)">Vision</button>
+      <button class="chip" id="tglRange" title="Tiles the selected dragon could sprint to this turn (R)">Sprint range</button>
+      <button class="chip" id="tglThreat" title="Tiles where enemy dragons could ram a head this turn (H)">Enemy reach</button>
+      <button class="chip" id="helpBtn" title="Controls and rules (?)">?</button>
+    </div>
+  </div>
+  <aside class="side">
+    <div class="side-head">
+      <div class="round-row"><span class="eyebrow" id="modeLabel">Round</span><span id="roundText" class="round-text">0 / 500</span></div>
+      <div class="bar"><div id="roundBar"></div></div>
+      <div class="order-strip" id="orderStrip"></div>
+      <div class="turn-row" id="turnRow">&nbsp;</div>
+    </div>
+    <div class="teams" id="teams"></div>
+
+    <div id="livePanel">
+      <div class="pace-row">
+        <button id="pauseBtn" class="btn small">Pause</button>
+        <button id="stepBtn" class="btn small ghost" title="While paused: let one dragon take its turn (.)">Step</button>
+        <button id="stepRoundBtn" class="btn small ghost" title="While paused: play one full round (,)">Round</button>
+        <label title="Minimum length of a round">pace <select id="paceSel" class="mini"></select></label>
+        <label title="How long the game waits for a manual dragon with nothing queued">wait <select id="timerSel" class="mini"></select></label>
+      </div>
+      <div id="playerPanel">
+        <div class="sel-card" id="selCard"></div>
+        <div class="list-head"><span>Your dragons</span>
+          <span class="list-tools">
+            <button class="link" id="allForage">all forage</button><button class="link" id="allManual">all manual</button>
+            <label class="child-mode">new: <select id="childModeSel" class="mini"><option value="forage">forage</option><option value="manual">manual</option><option value="coil">coil</option><option value="hunt">hunt</option></select></label>
+          </span></div>
+        <div class="dragon-list" id="dragonList"></div>
+      </div>
+    </div>
+
+    <div id="replayPanel" hidden>
+      <div class="pace-row">
+        <button id="rpPlay" class="btn small">Play</button>
+        <button id="rpBack" class="btn small ghost">◀</button>
+        <button id="rpFwd" class="btn small ghost">▶</button>
+        <select id="rpSpeed" class="mini"><option value="2">2 rounds/s</option><option value="5" selected>5 rounds/s</option><option value="12">12 rounds/s</option><option value="30">30 rounds/s</option></select>
+      </div>
+      <input type="range" id="rpSeek" min="0" max="0" value="0" class="seek">
+      <div class="replay-meta" id="rpMeta"></div>
+      <button id="rpExit" class="btn small ghost">Close replay</button>
+    </div>
+
+    <div class="list-head"><span>Events</span></div>
+    <div class="log" id="log"></div>
+  </aside>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="overlay-card" id="overlayCard"></div>
+  </div>
+</section>
+
+<div id="help" class="overlay" hidden>
+  <div class="overlay-card help-card">
+    <button class="close" id="helpClose">×</button>
+    <h2>Controls</h2>
+    <div class="help-grid">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</div><div>Move the selected dragon. If it is that dragon's turn the move happens at once; otherwise it is queued for its next turns. Orders straight into kelp or back into your own neck are refused unless you hold <kbd>Ctrl</kbd> (a deliberate sacrifice drops pearls for a team-mate).</div>
+      <div><kbd>Shift</kbd> + directions<br><kbd>Shift</kbd> + click</div><div>Build a <b>sprint</b>: several steps in one turn. Every step after the first costs one segment. Release Shift to send it. Shift-click a tile — or an enemy head — to sprint there by the shortest open path (turn on <i>Sprint range</i> to see what is reachable).</div>
+      <div><kbd>Q</kbd> / <kbd>E</kbd> / <kbd>X</kbd></div><div>Split in half / split off a 2-segment child / click a segment to choose where to split. The rear part becomes a new dragon facing the other way.</div>
+      <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></div><div>Mode: Manual · Forage · Coil · Hunt. Right-click a tile: swim there, then coil.</div>
+      <div><kbd>Tab</kbd> / click</div><div>Select next dragon / select a dragon. <kbd>F</kbd> toggles auto-follow of the dragon the game is waiting on.</div>
+      <div><kbd>Backspace</kbd></div><div>Clear the selected dragon's queue.</div>
+      <div><kbd>Space</kbd> <kbd>.</kbd> <kbd>,</kbd></div><div>Pause / while paused step one dragon turn / one round. You can queue orders while paused.</div>
+      <div><kbd>I</kbd> <kbd>T</kbd> <kbd>V</kbd> <kbd>R</kbd> <kbd>H</kbd> <kbd>C</kbd></div><div>Dragon ids · spawn timers · bot vision box · sprint range · enemy reach · centre on selection. Drag with the middle button (or Alt-drag) to slide the wrap-around map.</div>
+    </div>
+    <h2>Rules in one minute</h2>
+    <ul class="rules">
+      <li>Each round, pearls tick, then <b>every living dragon acts once, in ascending id order</b>. A split's child gets the next id and acts later in the same round.</li>
+      <li>Eating a pearl grows you by one (the tail stays put that step). Pearls are the only way to grow.</li>
+      <li>You die by moving into kelp, any body segment (your own tail included — it has not moved yet), or another head. <b>Head-on kills both dragons</b>, whatever their size or team.</li>
+      <li>A dead dragon turns every second segment, starting at the head, into a pearl.</li>
+      <li>A dragon of length L can move up to L−1 tiles in one turn. That is what makes a cheap dragon a torpedo.</li>
+      <li>Portals come in pairs of the same orientation; you leave the partner edge still travelling the same way. The map wraps at its borders.</li>
+      <li>After the last round: longest living dragon wins, then greatest total length, otherwise a draw. A team with no dragons at the end of a round loses at once.</li>
+    </ul>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script src="render.js"></script>
+<script src="client.js"></script>
+</body>
+</html>
